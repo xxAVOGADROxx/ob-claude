@@ -1,0 +1,215 @@
+#+TITLE: ob-claude Example Usage
+#+AUTHOR: Your Name
+#+DATE: [2025-01-05 Sat]
+#+OPTIONS: toc:t num:t
+
+* Setup and Configuration
+
+** Load the package
+#+begin_src emacs-lisp
+(require 'ob-claude)
+(ob-claude-setup)
+#+end_src
+
+** Configure API key (choose one method)
+#+begin_src emacs-lisp
+;; Method 1: Use with existing chatgpt-shell setup
+(ob-claude-use-chatgpt-shell-key)
+
+;; Method 2: Direct configuration
+;; (setq ob-claude-api-key "your-api-key-here")
+
+;; Method 3: Secure loading via auth-sources
+;; (setq ob-claude-api-key
+;;       (lambda ()
+;;         (auth-source-pick-first-password :host "api.anthropic.com")))
+#+end_src
+
+* Basic Usage Examples
+
+** Simple Query
+#+begin_src claude
+Hello Claude! Can you explain what org-babel is?
+#+end_src
+
+** Query with System Prompt
+#+begin_src claude :system "You are a helpful programming tutor. Always provide clear examples."
+How do I create a simple Python function?
+#+end_src
+
+** Query with Specific Model
+#+begin_src claude :model "claude-3-5-sonnet-20241022"
+What are the key differences between Python and JavaScript?
+#+end_src
+
+** Query with Low Temperature (More Focused)
+#+begin_src claude :temperature 0.1
+What is the exact formula for calculating compound interest?
+#+end_src
+
+** Query with High Temperature (More Creative)
+#+begin_src claude :temperature 0.9
+Write a creative story about a time-traveling programmer.
+#+end_src
+
+* Context Management Examples
+
+** Project Planning Context
+#+begin_src claude :context "project-planning" :system "You are a project manager helping with software development planning."
+I need to plan a new web application for task management. What are the key components I should consider?
+#+end_src
+
+#+begin_src claude :context "project-planning"
+For the task management app, what database schema would you recommend?
+#+end_src
+
+#+begin_src claude :context "project-planning"
+How long do you think this project would take for a team of 3 developers?
+#+end_src
+
+** Learning Python Context
+#+begin_src claude :context "python-learning" :system "You are a Python tutor. Provide clear, beginner-friendly explanations."
+I'm new to Python. How do I start learning it effectively?
+#+end_src
+
+#+begin_src claude :context "python-learning"
+What are some good practice projects for a Python beginner?
+#+end_src
+
+#+begin_src claude :context "python-learning"
+Can you explain what list comprehensions are and show me an example?
+#+end_src
+
+** Code Review Context
+#+begin_src claude :context "code-review" :system "You are a senior software engineer doing code review. Focus on best practices and potential issues."
+Here's a Python function I wrote. Can you review it?
+
+def calculate_average(numbers):
+    total = 0
+    for num in numbers:
+        total += num
+    return total / len(numbers)
+#+end_src
+
+#+begin_src claude :context "code-review"
+How would you improve the error handling in that function?
+#+end_src
+
+#+begin_src claude :context "code-review"
+What about making it more efficient or Pythonic?
+#+end_src
+
+* Advanced Usage Patterns
+
+** Data Analysis Workflow
+#+begin_src claude :context "data-analysis" :system "You are a data scientist. Provide practical, actionable advice."
+I have a CSV file with sales data: date, product, quantity, price. How should I start analyzing it?
+#+end_src
+
+#+begin_src claude :context "data-analysis"
+What Python libraries would be best for this analysis?
+#+end_src
+
+#+begin_src claude :context "data-analysis"
+Can you show me code to load the CSV and calculate monthly sales trends?
+#+end_src
+
+** Writing Assistance
+#+begin_src claude :context "writing" :system "You are a skilled editor and writing coach."
+I'm writing a technical blog post about API design. Here's my introduction:
+
+"APIs are important for modern software development. They allow different applications to communicate with each other."
+
+How can I make this more engaging?
+#+end_src
+
+#+begin_src claude :context "writing"
+What should I cover in the main sections of this blog post?
+#+end_src
+
+#+begin_src claude :context "writing"
+Can you help me write a compelling conclusion?
+#+end_src
+
+** Technical Architecture Discussion
+#+begin_src claude :context "architecture" :system "You are a solution architect with expertise in scalable systems."
+I'm designing a real-time chat application. What architecture patterns should I consider?
+#+end_src
+
+#+begin_src claude :context "architecture"
+How would WebSockets fit into this architecture?
+#+end_src
+
+#+begin_src claude :context "architecture"
+What about handling message persistence and offline users?
+#+end_src
+
+* Workflow Integration Examples
+
+** Daily Standup Notes
+#+begin_src claude :context "standup" :system "You are helping organize daily standup information."
+Yesterday I worked on the user authentication module and fixed 3 bugs. Today I plan to work on the password reset feature. I'm blocked on getting the SMTP server credentials. Can you help me format this for a standup?
+#+end_src
+
+** Meeting Minutes Processing
+#+begin_src claude :context "meeting-notes" :system "You are an assistant helping process meeting notes into action items."
+Here are my rough notes from today's project meeting:
+- Discussed API rate limiting
+- Need to implement caching
+- John will handle database optimization
+- Next review is Friday
+- Budget concerns about cloud costs
+
+Can you organize these into proper meeting minutes?
+#+end_src
+
+** Documentation Generation
+#+begin_src claude :context "documentation" :system "You are a technical writer helping create clear documentation."
+I have this function:
+
+def process_user_data(user_dict, validate=True, format_output=False):
+    # processes user data and returns cleaned result
+    pass
+
+Can you help me write comprehensive documentation for this function?
+#+end_src
+
+* Tips and Best Practices
+
+** Organizing Your Workflow
+1. **Use descriptive context names**: Instead of "context1", use "project-planning" or "code-review"
+2. **Separate concerns**: Keep different topics in different contexts
+3. **Use system prompts**: Set the right persona for your use case
+4. **Version control**: Keep these org files in git for history
+5. **Export options**: Use org-mode's export features for sharing
+
+** Security Considerations
+- Never commit API keys to version control
+- Use auth-sources or environment variables for keys
+- Regular audit of API usage and costs
+- Consider using different keys for different projects
+
+** Performance Tips
+- Use appropriate temperature settings (lower for factual, higher for creative)
+- Be specific in your prompts to get better results
+- Use context to build on previous conversations
+- Consider token limits for long conversations
+
+* Troubleshooting
+
+** Common Issues
+- **API key not found**: Check your configuration and ensure the key is accessible
+- **Rate limiting**: Claude API has rate limits, wait and retry
+- **Context too long**: Long conversations may hit token limits
+- **Network issues**: Check your internet connection and firewall
+
+** Debugging
+#+begin_src emacs-lisp
+;; Enable debug mode to see API requests
+(setq ob-claude-debug t)
+
+;; Check your API key configuration
+(ob-claude--get-api-key)
+#+end_src
+
+This example file demonstrates the flexibility and power of using Claude with org-babel for persistent, organized AI conversations integrated into your daily workflow.
