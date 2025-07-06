@@ -101,7 +101,11 @@ Can be a string or a function that returns the API key."
 
 (defun ob-claude--build-context (current-prompt context-name)
   "Build conversation context including CURRENT-PROMPT.
-If CONTEXT-NAME is provided, only include blocks with same context."
+Efficient by default: only sends current block unless context specified.
+Context modes:
+- nil/missing: current block only (efficient, saves tokens/costs)
+- \"all\": include all previous claude blocks
+- \"context-name\": include blocks with matching context name"
   (let ((blocks (ob-claude--get-relevant-blocks context-name))
         (context '()))
     (dolist (block blocks)
@@ -116,23 +120,30 @@ If CONTEXT-NAME is provided, only include blocks with same context."
 
 (defun ob-claude--get-relevant-blocks (context-name)
   "Get relevant source blocks for context.
-If CONTEXT-NAME is nil, get all previous claude blocks.
-If CONTEXT-NAME is provided, only get blocks with matching context."
+Context modes:
+- nil or missing: current block only (default, efficient)
+- \"all\": include all previous claude blocks
+- \"t\": same as \"all\" (legacy compatibility)
+- specific name: only blocks with matching context name"
   (let ((current-pos (point))
         (blocks '()))
-    (org-element-map (org-element-parse-buffer) 'src-block
-      (lambda (element)
-        (when (and (< (org-element-property :begin element) current-pos)
-                   (string= (org-element-property :language element) "claude"))
-          (let* ((params (org-babel-parse-header-arguments
-                          (or (org-element-property :parameters element) "")))
-                 (block-context (cdr (assoc :context params))))
-            (when (or (null context-name)
-                      (string= context-name "t")
-                      (string= block-context context-name))
-              (push (list :prompt (string-trim (org-element-property :value element))
-                          :response (ob-claude--get-block-result element))
-                    blocks))))))
+    (when (and context-name
+               (or (string= context-name "all")
+                   (string= context-name "t")
+                   (not (string= context-name "none"))))
+      (org-element-map (org-element-parse-buffer) 'src-block
+        (lambda (element)
+          (when (and (< (org-element-property :begin element) current-pos)
+                     (string= (org-element-property :language element) "claude"))
+            (let* ((params (org-babel-parse-header-arguments
+                            (or (org-element-property :parameters element) "")))
+                   (block-context (cdr (assoc :context params))))
+              (when (or (string= context-name "all")
+                        (string= context-name "t")
+                        (string= block-context context-name))
+                (push (list :prompt (string-trim (org-element-property :value element))
+                            :response (ob-claude--get-block-result element))
+                      blocks)))))))
     (nreverse blocks)))
 
 (defun ob-claude--get-block-result (element)
