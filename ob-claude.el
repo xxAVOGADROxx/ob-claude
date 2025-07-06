@@ -204,10 +204,10 @@ Context modes:
          (json-data (json-encode request-data))
          (url-request-method "POST")
          (url-request-extra-headers
-          `(("Content-Type" . "application/json")
+          `(("Content-Type" . "application/json; charset=utf-8")
             ("x-api-key" . ,api-key)
             ("anthropic-version" . "2023-06-01")))
-         (url-request-data json-data))
+         (url-request-data (encode-coding-string json-data 'utf-8)))
     (with-current-buffer (url-retrieve-synchronously ob-claude-api-url)
       (goto-char (point-min))
       (re-search-forward "^$" nil t)
