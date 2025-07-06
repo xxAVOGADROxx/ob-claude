@@ -149,7 +149,7 @@ If CONTEXT-NAME is provided, only get blocks with matching context."
     (dolist (item context)
       (let ((role (car item))
             (content (cdr item)))
-        (push `((role . ,(symbol-name role))
+        (push `((role . ,(substring (symbol-name role) 1))
                 (content . ,content))
               messages)))
     (nreverse messages)))
