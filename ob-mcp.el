@@ -53,7 +53,7 @@
      :env (("CHARLI3_API_URL" . "https://api.charli3.io")
            ("CHARLI3_BEARER_TOKEN" . ""))
      :tools (get_groups get_symbols get_token_data get_historical_data 
-             search_tokens get_server_info update_config test_connection)))
+                        search_tokens get_server_info update_config test_connection)))
   "Configuration for MCP servers.
 Each server is defined as:
   (SERVER-NAME
@@ -62,11 +62,11 @@ Each server is defined as:
    :env ((\"VAR1\" . \"value1\") (\"VAR2\" . \"value2\"))
    :tools (tool1 tool2 tool3))"
   :type '(alist :key-type symbol
-                :value-type (plist :options
-                            ((:command string)
-                             (:args (repeat string))
-                             (:env (alist :key-type string :value-type string))
-                             (:tools (repeat symbol)))))
+          :value-type (plist :options
+                             ((:command string)
+                              (:args (repeat string))
+                              (:env (alist :key-type string :value-type string))
+                              (:tools (repeat symbol)))))
   :group 'ob-mcp)
 
 (defcustom ob-mcp-timeout 30
@@ -88,6 +88,7 @@ Each server is defined as:
 
 (defun ob-mcp--start-server (server-name)
   "Start MCP server for SERVER-NAME."
+
   (let* ((config (cdr (assoc server-name ob-mcp-servers)))
          (command (plist-get config :command))
          (args (plist-get config :args))
