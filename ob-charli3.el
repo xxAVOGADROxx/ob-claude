@@ -21,7 +21,7 @@
 
 ;;; Code:
 
-(require 'ob-mcp)
+(load-file "/home/jsrqv/code/elisp/ob-claude/ob-mcp.el")
 (require 'org-table)
 
 ;;; Token Symbol Mapping
@@ -303,14 +303,35 @@
     ;; Debug information
     (message "Search Debug - Token: %s, Raw Data: %s, Parsed: %s" 
              token search-data parsed-results)
-    (if (and parsed-results (vectorp parsed-results) (> (length parsed-results) 0))
-        (progn
-          (message "Search Success - Found %d results, using first: %s" 
-                   (length parsed-results) (aref parsed-results 0))
-          (aref parsed-results 0)) ; First result (highest TVL)
-      (progn
-        (message "Search Failed - No valid results for token: %s" token)
-        nil))))
+    (cond
+     ;; Handle vector response (direct JSON array)
+     ((and parsed-results (vectorp parsed-results) (> (length parsed-results) 0))
+      (let ((first-result (aref parsed-results 0)))
+        (message "Search Success - Found %d results, using first: %s" 
+                 (length parsed-results) first-result)
+        first-result))
+     ;; Handle list response (converted from JSON)
+     ((and parsed-results (listp parsed-results) (> (length parsed-results) 0))
+      (let ((first-result (car parsed-results)))
+        (message "Search Success - Found %d results (list), using first: %s" 
+                 (length parsed-results) first-result)
+        first-result))
+     ;; Handle string response that might be JSON
+     ((stringp search-data)
+      (message "Search trying to parse string response: %s" search-data)
+      (condition-case nil
+          (let ((json-result (json-read-from-string search-data)))
+            (message "Parsed JSON result: %s" json-result)
+            (if (and json-result (vectorp json-result) (> (length json-result) 0))
+                (aref json-result 0)
+              nil))
+        (error 
+         (message "Search Failed - JSON parsing error for token: %s" token)
+         nil)))
+     ;; No valid results
+     (t
+      (message "Search Failed - No valid results for token: %s, got: %s" token parsed-results)
+      nil))))
 
 (defun ob-charli3--get-symbols-for-dex (dex)
   "Get all symbols for DEX."
@@ -348,17 +369,98 @@
   (condition-case err
       (let ((proc (ob-mcp--get-process 'charli3-tradingview)))
         (if proc
-            (ob-mcp--call-tool proc tool args "")
+            (ob-charli3--call-tool-raw proc tool args "")
           "MCP server not available"))
     (error (format "MCP call failed: %s" err))))
+
+(defun ob-charli3--call-tool-raw (proc tool args body)
+  "Call MCP tool via PROC with TOOL, ARGS, and BODY, returning raw JSON."
+  (let* ((request-id (format "req-%d" (random 10000)))
+         (tool-name (if (stringp tool) tool (symbol-name tool)))
+         (request (json-encode
+                   `((jsonrpc . "2.0")
+                     (id . ,request-id)
+                     (method . "tools/call")
+                     (params . ((name . ,tool-name)
+                                (arguments . ,(ob-charli3--format-args args body)))))))
+         (response-buffer (get-buffer-create (format "*mcp-response-%s*" tool-name))))
+    
+    ;; Send request
+    (process-send-string proc (concat request "\n"))
+    
+    ;; Wait for response
+    (with-timeout (ob-mcp-timeout
+                   (error "MCP tool call timeout: %s" tool-name))
+      (while (not (ob-charli3--response-ready-p proc request-id))
+        (sleep-for 0.1)))
+    
+    ;; Parse and return RAW response
+    (ob-charli3--parse-response-raw proc request-id)))
+
+(defun ob-charli3--format-args (args body)
+  "Format ARGS and BODY for MCP tool call."
+  (let ((formatted-args '()))
+    (dolist (arg args)
+      (push (cons (car arg) (cdr arg)) formatted-args))
+    (when (and body (not (string-empty-p (string-trim body))))
+      (push (cons "query" (string-trim body)) formatted-args))
+    formatted-args))
+
+(defun ob-charli3--response-ready-p (proc request-id)
+  "Check if response is ready for REQUEST-ID from PROC."
+  (with-current-buffer (process-buffer proc)
+    (save-excursion
+      (goto-char (point-min))
+      (re-search-forward (format "\"id\":\"%s\"" request-id) nil t))))
+
+(defun ob-charli3--parse-response-raw (proc request-id)
+  "Parse MCP response for REQUEST-ID from PROC, returning raw JSON."
+  (with-current-buffer (process-buffer proc)
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward (format "\"id\":\"%s\"" request-id) nil t)
+        (beginning-of-line)
+        (let* ((response-line (buffer-substring-no-properties 
+                               (line-beginning-position) 
+                               (line-end-position)))
+               (response-json (json-read-from-string response-line))
+               (result (cdr (assoc 'result response-json)))
+               (error-info (cdr (assoc 'error response-json))))
+          (cond
+           (error-info
+            (format "Error: %s" (cdr (assoc 'message error-info))))
+           (result
+            ;; Extract raw JSON from content array
+            (if (and (listp result) (vectorp (cdr (assoc 'content result))))
+                (let ((content (cdr (assoc 'content result))))
+                  (if (> (length content) 0)
+                      (cdr (assoc 'text (aref content 0)))
+                    "No content in response"))
+              (json-encode result)))
+           (t "No response received")))))))
 
 (defun ob-charli3--parse-json-response (response)
   "Parse JSON RESPONSE string."
   (condition-case nil
-      (if (stringp response)
-          (json-read-from-string response)
+      (cond
+       ;; If it's already parsed, return as-is
+       ((and (not (stringp response)) response)
         response)
-    (error nil)))
+       ;; If it's a string, try to parse it
+       ((stringp response)
+        (let ((trimmed (string-trim response)))
+          (if (string-prefix-p "[" trimmed)
+              (json-read-from-string trimmed)
+            ;; Maybe it's wrapped in an object
+            (let ((parsed (json-read-from-string trimmed)))
+              (or (cdr (assoc 'data parsed))
+                  (cdr (assoc 'result parsed))
+                  parsed)))))
+       ;; Return nil for anything else
+       (t nil))
+    (error 
+     (message "JSON parsing error for: %s" response)
+     nil)))
 
 ;;; Interactive Functions
 
