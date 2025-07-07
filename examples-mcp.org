@@ -1,0 +1,240 @@
+#+TITLE: MCP Integration Examples
+#+AUTHOR: Your Name
+#+DATE: 2025-01-07
+
+* Charli3 TradingView MCP Integration
+
+This document demonstrates how to use the MCP (Model Context Protocol) integration with ob-claude to access Charli3 Oracle data for Cardano DeFi markets.
+
+** Setup
+
+First, load and configure the MCP integration:
+
+#+begin_src elisp
+;; Load MCP integration
+(load-file "/path/to/ob-mcp.el")
+(ob-mcp-setup)
+
+;; Configure Charli3 server
+(ob-mcp-configure-charli3 
+ "https://api.charli3.io"
+ "your-bearer-token-here"
+ "/home/jsrqv/code/typescript/tradingview-demo/mcp-server/dist/index.js")
+#+end_src
+
+** Basic Server Operations
+
+*** Test Connection
+
+Check if the MCP server is working:
+
+#+begin_src mcp-charli3 :tool test_connection
+#+end_src
+
+*** Get Server Info
+
+View server status and configuration:
+
+#+begin_src mcp-charli3 :tool get_server_info
+#+end_src
+
+** Market Data Access
+
+*** Available DEXes
+
+Get list of supported DEXes:
+
+#+begin_src mcp-charli3 :tool get_groups
+#+end_src
+
+*** Available Symbols
+
+Get symbols for a specific DEX:
+
+#+begin_src mcp-charli3 :tool get_symbols :group "Aggregate"
+#+end_src
+
+*** Current Token Data
+
+Get real-time price and TVL data:
+
+#+begin_src mcp-charli3 :tool get_token_data :policy-id "ada_policy_id" :asset-name "ada_asset_name"
+#+end_src
+
+*** Historical Price Data
+
+Get OHLCV data for analysis:
+
+#+begin_src mcp-charli3 :tool get_historical_data :symbol "ADAUSD:Aggregate" :resolution "1d" :from 1704067200 :to 1704153600
+#+end_src
+
+** Token Discovery
+
+*** Search Tokens
+
+Find tokens by name or ticker:
+
+#+begin_src mcp-charli3 :tool search_tokens :group "Aggregate" :query "ADA" :limit 10
+#+end_src
+
+*** Search Specific DEX
+
+Search within a specific DEX:
+
+#+begin_src mcp-charli3 :tool search_tokens :group "Minswap" :query "SUNDAE" :limit 5
+#+end_src
+
+** Advanced Analysis with Claude
+
+Now let's combine MCP data with Claude analysis. First, get some data:
+
+#+begin_src mcp-charli3 :tool get_historical_data :symbol "ADAUSD:Aggregate" :resolution "1d" :from 1704067200 :to 1704153600
+#+end_src
+
+#+RESULTS:
+[This will show the historical price data]
+
+Now analyze it with Claude:
+
+#+begin_src claude :context "trading-analysis"
+Based on the ADA price data above, provide a technical analysis including:
+1. Price trends and patterns
+2. Support and resistance levels  
+3. Volume analysis
+4. Trading recommendations
+#+end_src
+
+** Multi-Token Analysis
+
+Get data for multiple tokens and compare:
+
+#+begin_src mcp-charli3 :tool search_tokens :group "Aggregate" :query "SUNDAE" :limit 3
+#+end_src
+
+#+begin_src mcp-charli3 :tool get_token_data :policy-id "sundae_policy_id" :asset-name "sundae_asset_name"
+#+end_src
+
+#+begin_src claude :context "trading-analysis"
+Compare the performance of ADA vs SUNDAE based on the data above. 
+Which shows better momentum and why?
+#+end_src
+
+** Market Overview Dashboard
+
+Create a comprehensive market overview:
+
+#+begin_src mcp-charli3 :tool get_groups
+#+end_src
+
+#+begin_src mcp-charli3 :tool get_symbols :group "Aggregate"
+#+end_src
+
+#+begin_src claude :context "market-overview"
+Based on the DEX groups and symbols data above, create a market overview report including:
+1. Most active DEXes
+2. Top trading pairs by volume
+3. Market diversity analysis
+4. Investment opportunities
+#+end_src
+
+** Real-time Monitoring Setup
+
+For ongoing monitoring, you can create templates:
+
+*** Price Alert Template
+#+begin_src mcp-charli3 :tool get_token_data :policy-id "your_token_policy" :asset-name "your_token_name"
+#+end_src
+
+*** Volume Analysis Template  
+#+begin_src mcp-charli3 :tool get_historical_data :symbol "YOUR_SYMBOL:Aggregate" :resolution "1d" :from START_TIMESTAMP :to END_TIMESTAMP
+#+end_src
+
+** Configuration Management
+
+*** Update API Configuration
+
+#+begin_src mcp-charli3 :tool update_config :api-url "https://api.charli3.io" :bearer-token "new_token_here"
+#+end_src
+
+** Troubleshooting
+
+*** Check Server Status
+
+#+begin_src mcp-charli3 :tool get_server_info
+#+end_src
+
+*** Test Basic Connectivity
+
+#+begin_src mcp-charli3 :tool test_connection
+#+end_src
+
+** Workflow Examples
+
+*** Daily Market Analysis Workflow
+
+1. Get market overview:
+#+begin_src mcp-charli3 :tool get_groups
+#+end_src
+
+2. Check top tokens:
+#+begin_src mcp-charli3 :tool search_tokens :group "Aggregate" :query "" :limit 20
+#+end_src
+
+3. Analyze with Claude:
+#+begin_src claude :context "daily-analysis"
+Provide a daily market summary based on the data above, highlighting:
+- Most active tokens
+- Price movements
+- Volume trends
+- Trading opportunities
+#+end_src
+
+*** Token Research Workflow
+
+1. Search for token:
+#+begin_src mcp-charli3 :tool search_tokens :group "Aggregate" :query "TOKEN_NAME" :limit 5
+#+end_src
+
+2. Get current data:
+#+begin_src mcp-charli3 :tool get_token_data :policy-id "POLICY_ID" :asset-name "ASSET_NAME"
+#+end_src
+
+3. Get historical data:
+#+begin_src mcp-charli3 :tool get_historical_data :symbol "TOKEN:Aggregate" :resolution "1d" :from 1704067200 :to 1704153600
+#+end_src
+
+4. Research analysis:
+#+begin_src claude :context "token-research"
+Provide a comprehensive token analysis based on the data above:
+1. Fundamental analysis
+2. Technical indicators
+3. Risk assessment
+4. Investment thesis
+#+end_src
+
+** Tips and Best Practices
+
+1. **Use context names** to keep related analyses together
+2. **Cache results** by referencing previous blocks when possible
+3. **Combine multiple data sources** for comprehensive analysis
+4. **Use appropriate time resolutions** for your analysis timeframe
+5. **Monitor API usage** to control costs
+
+** Available Resolutions
+
+- =1min= - 1 minute intervals (short-term trading)
+- =5min= - 5 minute intervals (intraday analysis)  
+- =15min= - 15 minute intervals (hourly trends)
+- =60min= - 1 hour intervals (daily patterns)
+- =1d= - 1 day intervals (long-term analysis)
+
+** Supported DEXes
+
+- *Aggregate* - Synthetic pool combining all DEXes
+- *Minswap* - V1 and V2 protocols
+- *SundaeSwap* - V1 and V3 protocols  
+- *WingRiders* - V1 and V2 protocols
+- *MuesliSwap* - Community DEX
+- *Spectrum* - AMM protocol
+- *Splash* - DEX platform
+- *VyFi* - Yield farming platform
