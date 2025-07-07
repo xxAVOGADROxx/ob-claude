@@ -139,9 +139,11 @@ Each server is defined as:
 
 (defun ob-mcp-setup ()
   "Set up org-babel MCP integration."
+  (interactive)
   (add-to-list 'org-babel-load-languages '(mcp-charli3 . t))
   (org-babel-do-load-languages 'org-babel-load-languages org-babel-load-languages)
-  (add-to-list 'org-src-lang-modes '("mcp-charli3" . json)))
+  (add-to-list 'org-src-lang-modes '("mcp-charli3" . json))
+  (message "MCP integration setup complete"))
 
 (defun org-babel-execute:mcp-charli3 (body params)
   "Execute MCP tool call for Charli3 server in BODY with PARAMS."
@@ -149,7 +151,8 @@ Each server is defined as:
 
 (defun ob-mcp--execute-tool (server-name body params)
   "Execute MCP tool call for SERVER-NAME with BODY and PARAMS."
-  (let* ((tool (cdr (assoc :tool params)))
+  (let* ((tool-param (cdr (assoc :tool params)))
+         (tool (if (stringp tool-param) tool-param (symbol-name tool-param)))
          (args (ob-mcp--extract-tool-args params))
          (proc (ob-mcp--get-process server-name)))
     (unless tool
@@ -174,20 +177,21 @@ Each server is defined as:
 (defun ob-mcp--call-tool (proc tool args body)
   "Call MCP tool via PROC with TOOL, ARGS, and BODY."
   (let* ((request-id (format "req-%d" (random 10000)))
+         (tool-name (if (stringp tool) tool (symbol-name tool)))
          (request (json-encode
                    `((jsonrpc . "2.0")
                      (id . ,request-id)
                      (method . "tools/call")
-                     (params . ((name . ,(symbol-name tool))
+                     (params . ((name . ,tool-name)
                                 (arguments . ,(ob-mcp--format-args args body)))))))
-         (response-buffer (get-buffer-create (format "*mcp-response-%s*" tool))))
+         (response-buffer (get-buffer-create (format "*mcp-response-%s*" tool-name))))
     
     ;; Send request
     (process-send-string proc (concat request "\n"))
     
     ;; Wait for response
     (with-timeout (ob-mcp-timeout
-                   (error "MCP tool call timeout: %s" tool))
+                   (error "MCP tool call timeout: %s" tool-name))
       (while (not (ob-mcp--response-ready-p proc request-id))
         (sleep-for 0.1)))
     
