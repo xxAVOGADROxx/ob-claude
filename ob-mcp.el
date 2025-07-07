@@ -49,8 +49,9 @@
 (defcustom ob-mcp-servers
   '((charli3-tradingview
      :command "node"
-     :args ("/path/to/mcp-server/dist/index.js")
-     :env (("CHARLI3_API_URL" . "https://api.charli3.io")
+     :args ("dist/index.js")
+     :working-directory "/home/jsrqv/code/typescript/tradingview-demo/mcp-server"
+     :env (("CHARLI3_API_URL" . "https://dev-api.charli3.io")
            ("CHARLI3_BEARER_TOKEN" . ""))
      :tools (get_groups get_symbols get_token_data get_historical_data 
                         search_tokens get_server_info update_config test_connection)))
@@ -93,6 +94,8 @@ Each server is defined as:
          (command (plist-get config :command))
          (args (plist-get config :args))
          (env (plist-get config :env))
+         (working-dir (plist-get config :working-directory))
+         (default-directory (or working-dir default-directory))
          (process-environment 
           (append (mapcar (lambda (pair) (format "%s=%s" (car pair) (cdr pair))) env)
                   process-environment))
@@ -103,7 +106,7 @@ Each server is defined as:
     (when proc
       (set-process-filter proc #'ob-mcp--process-filter)
       (setf (alist-get server-name ob-mcp--active-processes) proc)
-      (message "Started MCP server: %s" server-name)
+      (message "Started MCP server: %s in directory: %s" server-name default-directory)
       proc)))
 
 (defun ob-mcp--process-filter (proc string)
@@ -236,13 +239,113 @@ Each server is defined as:
 
 (defun ob-mcp--format-result (result)
   "Format MCP tool RESULT for display."
-  (if (vectorp result)
+  (cond
+   ;; Handle content array with text responses
+   ((and (listp result) (vectorp (cdr (assoc 'content result))))
+    (let ((content (cdr (assoc 'content result))))
       (mapconcat (lambda (item)
-                   (if (and (listp item) (cdr (assoc 'text item)))
-                       (cdr (assoc 'text item))
-                     (json-encode item)))
-                 result "\n")
-    (json-encode result)))
+                   (let ((text (cdr (assoc 'text item))))
+                     (if text
+                         (ob-mcp--pretty-format-json text)
+                       (json-encode item))))
+                 content "\n")))
+   ;; Handle error responses
+   ((and (listp result) (cdr (assoc 'error result)))
+    (let ((error-info (cdr (assoc 'error result))))
+      (format "ERROR: %s\nType: %s\nDetails: %s"
+              (cdr (assoc 'message error-info))
+              (cdr (assoc 'type error-info))
+              (cdr (assoc 'details error-info)))))
+   ;; Handle direct content
+   ((vectorp result)
+    (mapconcat (lambda (item)
+                 (if (and (listp item) (cdr (assoc 'text item)))
+                     (ob-mcp--pretty-format-json (cdr (assoc 'text item)))
+                   (json-encode item)))
+               result "\n"))
+   ;; Fallback
+   (t (json-encode result))))
+
+(defun ob-mcp--pretty-format-json (json-string)
+  "Pretty format JSON string for better readability."
+  (condition-case nil
+      (let ((parsed (json-read-from-string json-string)))
+        (cond
+         ;; Handle simple objects with formatted output
+         ((and (listp parsed)
+               (cdr (assoc 'name parsed))
+               (cdr (assoc 'version parsed)))
+          (ob-mcp--format-server-info parsed))
+         ;; Handle token data
+         ((and (listp parsed)
+               (cdr (assoc 'ticker parsed))
+               (cdr (assoc 'price parsed)))
+          (ob-mcp--format-token-data parsed))
+         ;; Handle arrays of objects
+         ((vectorp parsed)
+          (ob-mcp--format-array parsed))
+         ;; Handle errors
+         ((and (listp parsed) (cdr (assoc 'error parsed)))
+          (let ((error-info (cdr (assoc 'error parsed))))
+            (format "ERROR: %s" (cdr (assoc 'message error-info)))))
+         ;; Default: pretty print JSON
+         (t (with-temp-buffer
+              (insert json-string)
+              (json-pretty-print-buffer)
+              (buffer-string)))))
+    (error json-string)))
+
+(defun ob-mcp--format-server-info (server-info)
+  "Format server info for display."
+  (format "Server: %s v%s (%s)\nAPI: %s (Token: %s)\nCache: %d entries\nQueue: %d/%d requests\nAPI Calls: %d\nSupported DEXes: %s"
+          (cdr (assoc 'name server-info))
+          (cdr (assoc 'version server-info))
+          (cdr (assoc 'status server-info))
+          (cdr (assoc 'apiUrl (cdr (assoc 'config server-info))))
+          (if (cdr (assoc 'hasToken (cdr (assoc 'config server-info)))) "✓" "✗")
+          (cdr (assoc 'size (cdr (assoc 'cache server-info))))
+          (cdr (assoc 'running (cdr (assoc 'queue server-info))))
+          (cdr (assoc 'maxConcurrent (cdr (assoc 'queue server-info))))
+          (cdr (assoc 'count (cdr (assoc 'api server-info))))
+          (mapconcat 'identity (cdr (assoc 'supportedDexes server-info)) ", ")))
+
+(defun ob-mcp--format-token-data (token-data)
+  "Format token data for display."
+  (format "%s (%s)\nPrice: $%.6f (%.2f%%)\nVolume 24h: $%.2f\nTVL: $%.2f\nLast Updated: %s"
+          (cdr (assoc 'ticker token-data))
+          (cdr (assoc 'name token-data))
+          (cdr (assoc 'price token-data))
+          (cdr (assoc 'price_change_percentage_24h token-data))
+          (cdr (assoc 'volume_24h token-data))
+          (cdr (assoc 'tvl token-data))
+          (cdr (assoc 'timestamp token-data))))
+
+(defun ob-mcp--format-array (array)
+  "Format array of objects for display."
+  (mapconcat (lambda (item)
+               (cond
+                ;; Group info
+                ((and (listp item) (cdr (assoc 'name item)) (cdr (assoc 'id item)))
+                 (format "• %s (%s) - %d symbols"
+                         (cdr (assoc 'name item))
+                         (cdr (assoc 'id item))
+                         (or (cdr (assoc 'symbols_count item)) 0)))
+                ;; Symbol info
+                ((and (listp item) (cdr (assoc 'ticker item)) (cdr (assoc 'dex item)))
+                 (format "• %s - %s (%s)"
+                         (cdr (assoc 'ticker item))
+                         (cdr (assoc 'name item))
+                         (cdr (assoc 'dex item))))
+                ;; Historical data
+                ((and (listp item) (cdr (assoc 'time item)) (cdr (assoc 'close item)))
+                 (format "Time: %s, Close: %.6f, Volume: %.2f"
+                         (format-time-string "%Y-%m-%d %H:%M" 
+                                             (seconds-to-time (cdr (assoc 'time item))))
+                         (cdr (assoc 'close item))
+                         (or (cdr (assoc 'volume item)) 0)))
+                ;; Default
+                (t (json-encode item))))
+             array "\n"))
 
 ;;; Interactive Functions
 
